@@ -208,7 +208,7 @@ struct EpubReaderView: View {
                 } label: {
                     HStack {
                         Text(chapter.title)
-                            .foregroundStyle(chapter.id == currentChapterIndex ? .accentColor : .primary)
+                            .foregroundStyle(chapter.id == currentChapterIndex ? Color.accentColor : Color.primary)
                         Spacer()
                         if chapter.id == currentChapterIndex {
                             Image(systemName: "checkmark")

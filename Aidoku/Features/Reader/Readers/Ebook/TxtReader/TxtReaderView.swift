@@ -53,9 +53,12 @@ struct TxtReaderView: View {
                     }
                 }
                 .contentShape(Rectangle())
-                .onTapGesture { location in
-                    handleTap(at: location)
-                }
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 0)
+                        .onEnded { value in
+                            handleTap(at: value.location)
+                        }
+                )
 
                 // 悬浮工具浮层
                 if showControls {
@@ -264,7 +267,7 @@ struct TxtReaderView: View {
                 } label: {
                     HStack {
                         Text(chapter.title)
-                            .foregroundStyle(chapter.id == currentChapterIndex ? .accentColor : .primary)
+                            .foregroundStyle(chapter.id == currentChapterIndex ? Color.accentColor : Color.primary)
                         Spacer()
                         if chapter.id == currentChapterIndex {
                             Image(systemName: "checkmark")

@@ -1183,6 +1183,8 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
                         setReader(.paged)
                     case .webtoon, .continuous:
                         setReader(.scroll)
+                    case .ebookPaged, .ebookScroll:
+                        setReader(.paged)
                 }
                 setChapter(chapter)
                 loadCurrentChapter()

@@ -41,7 +41,7 @@ final class TxtReaderViewController: UIViewController, ReaderReaderDelegate {
         // 尝试从章节本地文件或 URL 读取
         var parsedChapters: [TxtChapter] = []
 
-        if let url = chapter.url.flatMap({ URL(string: $0) }) ?? manga.url {
+        if let url = chapter.url ?? manga.url {
             if FileManager.default.fileExists(atPath: url.path) {
                 parsedChapters = TxtParser.parse(url: url)
             }

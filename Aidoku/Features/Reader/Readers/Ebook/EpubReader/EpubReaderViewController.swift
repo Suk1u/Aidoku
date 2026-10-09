@@ -40,7 +40,7 @@ final class EpubReaderViewController: UIViewController, ReaderReaderDelegate {
     private func loadEpubContent() {
         var book: EpubBook?
 
-        if let url = chapter.url.flatMap({ URL(string: $0) }) ?? manga.url {
+        if let url = chapter.url ?? manga.url {
             if FileManager.default.fileExists(atPath: url.path) {
                 book = try? EpubParser.parse(url: url)
             }
