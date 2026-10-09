@@ -17,7 +17,7 @@ class TabBarController: UITabBarController {
     private var settingsPath: NavigationCoordinator?
     private var previousSelectedIndex: Int?
 
-    private weak var historyNavigationController: UINavigationController?
+    private weak var homeNavigationController: UINavigationController?
     private weak var searchNavigationController: UINavigationController?
 
     private let searchController = SearchViewController()
@@ -79,12 +79,12 @@ class TabBarController: UITabBarController {
         let searchViewController = NavigationController(rootViewController: searchController)
         searchNavigationController = searchViewController
 
-        let historyPath = NavigationCoordinator(rootViewController: nil)
-        let historyHostingController = UIHostingController(rootView: HistoryView()
-            .environmentObject(historyPath))
-        historyPath.rootViewController = historyHostingController
-        let historyViewController = NavigationController(rootViewController: historyHostingController)
-        historyNavigationController = historyViewController
+        let homePath = NavigationCoordinator(rootViewController: nil)
+        let homeHostingController = UIHostingController(rootView: HomeView()
+            .environmentObject(homePath))
+        homePath.rootViewController = homeHostingController
+        let homeViewController = NavigationController(rootViewController: homeHostingController)
+        homeNavigationController = homeViewController
 
         let settingsPath = NavigationCoordinator(rootViewController: nil)
         let settingsViewController: UIViewController
@@ -107,9 +107,9 @@ class TabBarController: UITabBarController {
         }
         self.settingsPath = settingsPath
 
+        homeViewController.navigationBar.prefersLargeTitles = true
         libraryViewController.navigationBar.prefersLargeTitles = true
         browseViewController.navigationBar.prefersLargeTitles = true
-        historyViewController.navigationBar.prefersLargeTitles = true
         searchViewController.navigationBar.prefersLargeTitles = true
 
         if #available(iOS 26.0, *) {
@@ -119,25 +119,25 @@ class TabBarController: UITabBarController {
             searchTab.automaticallyActivatesSearch = true
             let fixedTabs = [
                 UITab(
+                    title: NSLocalizedString("HOME"),
+                    image: UIImage(systemName: "house.fill"),
+                    identifier: "0"
+                ) { _ in
+                    homeViewController
+                },
+                UITab(
                     title: NSLocalizedString("LIBRARY"),
                     image: UIImage(systemName: "books.vertical.fill"),
-                    identifier: "0"
+                    identifier: "1"
                 ) { _ in
                     libraryViewController
                 },
                 UITab(
                     title: NSLocalizedString("BROWSE"),
                     image: UIImage(systemName: "globe"),
-                    identifier: "1"
-                ) { _ in
-                    browseViewController
-                },
-                UITab(
-                    title: NSLocalizedString("HISTORY"),
-                    image: UIImage(systemName: "clock.fill"),
                     identifier: "2"
                 ) { _ in
-                    historyViewController
+                    browseViewController
                 },
                 UITab(
                     title: NSLocalizedString("SETTINGS"),
@@ -153,34 +153,30 @@ class TabBarController: UITabBarController {
             }
             tabs = fixedTabs + [searchTab]
         } else {
+            homeViewController.tabBarItem = UITabBarItem(
+                title: NSLocalizedString("HOME"),
+                image: UIImage(systemName: "house.fill"),
+                tag: 0
+            )
             libraryViewController.tabBarItem = UITabBarItem(
                 title: NSLocalizedString("LIBRARY"),
                 image: UIImage(systemName: "books.vertical.fill"),
-                tag: 0
+                tag: 1
             )
             browseViewController.tabBarItem = UITabBarItem(
                 title: NSLocalizedString("BROWSE"),
                 image: UIImage(systemName: "globe"),
-                tag: 1
-            )
-            historyViewController.tabBarItem = UITabBarItem(
-                tabBarSystemItem: .history,
                 tag: 2
-            )
-            searchViewController.tabBarItem = UITabBarItem(
-                tabBarSystemItem: .search,
-                tag: 3
             )
             settingsViewController.tabBarItem = UITabBarItem(
                 title: NSLocalizedString("SETTINGS"),
                 image: UIImage(systemName: "gear"),
-                tag: 4
+                tag: 3
             )
             viewControllers = [
+                homeViewController,
                 libraryViewController,
                 browseViewController,
-                historyViewController,
-                searchViewController,
                 settingsViewController
             ]
         }
@@ -314,41 +310,36 @@ extension TabBarController: UITabBarControllerDelegate {
     @available(iOS 18.0, *)
     func tabBarController(_ tabBarController: UITabBarController, shouldSelectTab tab: UITab) -> Bool {
         if tab === tabBarController.selectedTab {
-            checkForHistoryReselection()
+            checkForHomeReselection()
         }
         return true
     }
 
     func tabBarController(_ tabBarController: UITabBarController, shouldSelect viewController: UIViewController) -> Bool {
         if viewController === selectedViewController {
-            checkForHistoryReselection()
+            checkForHomeReselection()
         }
         return true
     }
 
-    // when the history tab is selected while it's already showing the top of the history list,
-    // let the history view know so that it can continue reading the last opened manga
-    private func checkForHistoryReselection() {
+    // when the home tab is selected while it's already showing the top of the home list,
+    // let the home view know so that it can continue reading the last opened manga
+    private func checkForHomeReselection() {
         guard
             AppSettings.library.continueReadingOnReselect.get(),
-            let historyNavigationController,
-            selectedViewController === historyNavigationController,
-            // if there's anything pushed on top, the default behavior pops back to the history list
-            historyNavigationController.viewControllers.count == 1,
+            let homeNavigationController,
+            selectedViewController === homeNavigationController,
+            // if there's anything pushed on top, the default behavior pops back to the home list
+            homeNavigationController.viewControllers.count == 1,
             // if the list isn't at the top, the default behavior scrolls it there
-            let scrollView = historyNavigationController.topViewController?.view.firstScrollView(),
+            let scrollView = homeNavigationController.topViewController?.view.firstScrollView(),
             scrollView.isScrolledToTop
         else { return }
         NotificationCenter.default.post(name: .historyTabReselected, object: nil)
     }
 
     private func checkForSettingsPop() {
-        let settingsIndex: Int
-        if #available(iOS 26.0, *) {
-            settingsIndex = 3
-        } else {
-            settingsIndex = 4
-        }
+        let settingsIndex = 3
         if selectedIndex == previousSelectedIndex && previousSelectedIndex == settingsIndex {
             settingsPath?.navigationController?.popToRootViewController(animated: true)
         }
