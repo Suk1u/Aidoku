@@ -63,7 +63,7 @@ struct ReaderSettingsView: View {
             List {
                 generalSection
 
-                if #available(iOS 18.0, *), reader != .text {
+                if #available(iOS 18.0, *), reader != .text && reader != .epub && reader != .txt {
                     dictionarySection
                 }
 
@@ -96,7 +96,7 @@ struct ReaderSettingsView: View {
                     Text(NSLocalizedString("TAP_ZONES"))
                 }
 
-                if reader == .text {
+                if reader == .text || reader == .epub || reader == .txt {
                     textSection
                 } else {
                     if !downsampleImages.value {
