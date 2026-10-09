@@ -200,7 +200,7 @@ struct EpubReaderView: View {
 
     // MARK: - Table of Contents Sheet
     private var tocSheetView: some View {
-        NavigationStack {
+        PlatformNavigationStack {
             List(book.chapters) { chapter in
                 Button {
                     currentChapterIndex = chapter.id

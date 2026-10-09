@@ -259,7 +259,7 @@ struct TxtReaderView: View {
 
     // MARK: - Table of Contents Sheet
     private var tocSheetView: some View {
-        NavigationStack {
+        PlatformNavigationStack {
             List(chapters) { chapter in
                 Button {
                     currentChapterIndex = chapter.id
