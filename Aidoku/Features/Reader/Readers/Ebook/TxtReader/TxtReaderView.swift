@@ -45,14 +45,7 @@ struct TxtReaderView: View {
         max(0, pages.count - (currentPageIndex + 1))
     }
 
-    private var bookmarks: [EbookBookmark] {
-        get {
-            (try? JSONDecoder().decode([EbookBookmark].self, from: bookmarksData)) ?? []
-        }
-        set {
-            bookmarksData = (try? JSONEncoder().encode(newValue)) ?? Data()
-        }
-    }
+    @State private var bookmarks: [EbookBookmark] = []
 
     private var isCurrentPageBookmarked: Bool {
         bookmarks.contains {
@@ -146,7 +139,15 @@ struct TxtReaderView: View {
             )
         }
         .onAppear {
+            if let decoded = try? JSONDecoder().decode([EbookBookmark].self, from: bookmarksData) {
+                bookmarks = decoded
+            }
             recalculatePages()
+        }
+        .onChange(of: bookmarks) { newBookmarks in
+            if let encoded = try? JSONEncoder().encode(newBookmarks) {
+                bookmarksData = encoded
+            }
         }
         .onChange(of: currentChapterIndex) { _ in
             currentPageIndex = 0

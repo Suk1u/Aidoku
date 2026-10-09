@@ -479,7 +479,18 @@ struct AppleBooksThemeSettingsSheet: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 24)
         }
-        .presentationDetents([.height(260)])
+        .sheetHeight260()
         .background(Color(uiColor: .systemBackground))
+    }
+}
+
+private extension View {
+    @ViewBuilder
+    func sheetHeight260() -> some View {
+        if #available(iOS 16.0, *) {
+            self.presentationDetents([.height(260)])
+        } else {
+            self
+        }
     }
 }

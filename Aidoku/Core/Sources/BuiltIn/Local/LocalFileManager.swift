@@ -342,20 +342,21 @@ extension LocalFileManager {
                 false
             }
             if !hasMangaObject {
-                await LocalFileDataManager.shared.createSeries(
+                await LocalFileDataManager.shared.createManga(
+                    url: mangaFolder,
                     id: resolvedMangaId,
                     title: mangaTitle,
-                    description: mangaDescription,
-                    coverUrl: coverURL?.relativePath(to: documentsDirectory)
+                    cover: coverURL.map { LocalFileDataManager.shared.removeDocumentsDirPrefix(from: $0) },
+                    description: mangaDescription
                 )
             }
             await LocalFileDataManager.shared.createChapter(
                 mangaId: resolvedMangaId,
+                url: destURL,
                 id: destURL.lastPathComponent,
                 title: chapterName ?? url.deletingPathExtension().lastPathComponent,
                 volume: volume,
-                chapter: chapterNumber,
-                archivePath: destURL.relativePath(to: documentsDirectory)
+                chapter: chapterNumber
             )
             return
         }

@@ -42,14 +42,7 @@ struct EpubReaderView: View {
         max(0, book.chapters.count - (currentChapterIndex + 1))
     }
 
-    private var bookmarks: [EbookBookmark] {
-        get {
-            (try? JSONDecoder().decode([EbookBookmark].self, from: bookmarksData)) ?? []
-        }
-        set {
-            bookmarksData = (try? JSONEncoder().encode(newValue)) ?? Data()
-        }
-    }
+    @State private var bookmarks: [EbookBookmark] = []
 
     private var isCurrentChapterBookmarked: Bool {
         bookmarks.contains { $0.chapterIndex == currentChapterIndex }
@@ -137,6 +130,16 @@ struct EpubReaderView: View {
                     set: { readingModeRaw = $0.rawValue }
                 )
             )
+        }
+        .onAppear {
+            if let decoded = try? JSONDecoder().decode([EbookBookmark].self, from: bookmarksData) {
+                bookmarks = decoded
+            }
+        }
+        .onChange(of: bookmarks) { newBookmarks in
+            if let encoded = try? JSONEncoder().encode(newBookmarks) {
+                bookmarksData = encoded
+            }
         }
     }
 

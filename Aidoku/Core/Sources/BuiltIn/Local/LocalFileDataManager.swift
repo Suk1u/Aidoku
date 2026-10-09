@@ -460,7 +460,7 @@ extension LocalFileDataManager {
 
 // MARK: Helpers
 extension LocalFileDataManager {
-    private func removeDocumentsDirPrefix(from url: URL) -> String {
+    func removeDocumentsDirPrefix(from url: URL) -> String {
         let documentsDirPath = FileManager.default.documentDirectory.path + "/"
         let path = url.path.replacingOccurrences(of: documentsDirPath, with: "")
         let privatePrefix = "/private"
