@@ -663,7 +663,7 @@
 /* Begin XCRemoteSwiftPackageReference section */
 		EE7A41EF2F5D20000044AF4C /* XCRemoteSwiftPackageReference "hoshidicts" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/Manhhao/hoshidicts.git";
+			repositoryURL = "https://github.com/Suk1u/hoshidicts.git";
 			requirement = {
 				branch = main;
 				kind = branch;
