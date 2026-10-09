@@ -17,7 +17,7 @@ actor LocalFileManager {
     private var lastScanTime = Date.distantPast
     private var scanTask: Task<Void, Never>?
 
-    static let allowedFileExtensions = Set(["cbz", "zip"])
+    static let allowedFileExtensions = Set(["cbz", "zip", "epub", "txt"])
     static let allowedImageExtensions = Set(["jpg", "jpeg", "png", "webp", "gif", "heic", "avif"])
     static let allowedTextExtensions = Set(["txt", "md"])
     static let allowedPageExtensions = allowedImageExtensions.union(allowedTextExtensions)
@@ -52,6 +52,31 @@ extension LocalFileManager {
         let pathExtension = url.pathExtension.lowercased()
         guard Self.allowedFileExtensions.contains(pathExtension) else {
             return nil
+        }
+
+        if pathExtension == "epub" {
+            let epubBook = try? EpubParser.parse(url: url)
+            let previewImages: [PlatformImage] = epubBook?.coverImage.map { [$0] } ?? []
+            let pageCount = epubBook?.chapters.count ?? 1
+            let name = epubBook?.title ?? url.deletingPathExtension().lastPathComponent
+            return ImportFileInfo(
+                url: url,
+                previewImages: previewImages,
+                name: name,
+                pageCount: pageCount,
+                fileType: .epub,
+                comicInfo: nil
+            )
+        } else if pathExtension == "txt" {
+            let chapters = TxtParser.parse(url: url)
+            return ImportFileInfo(
+                url: url,
+                previewImages: [],
+                name: url.deletingPathExtension().lastPathComponent,
+                pageCount: max(1, chapters.count),
+                fileType: .txt,
+                comicInfo: nil
+            )
         }
 
         // read zip file
@@ -222,8 +247,8 @@ extension LocalFileManager {
 
         let documentsDirectory = FileManager.default.documentDirectory
 
-        // ensure the file is one we can parse
-        guard Self.allowedFileExtensions.contains(url.pathExtension.lowercased()) else {
+        let ext = url.pathExtension.lowercased()
+        guard Self.allowedFileExtensions.contains(ext) else {
             throw LocalFileManagerError.invalidFileType
         }
 
@@ -253,6 +278,86 @@ extension LocalFileManager {
             if shouldRemoveUrl {
                 try? FileManager.default.removeItem(at: url)
             }
+        }
+
+        // Special handling for E-books (EPUB & TXT)
+        if ext == "epub" || ext == "txt" {
+            let resolvedMangaId = (mangaId ?? mangaName ?? url.deletingPathExtension().lastPathComponent).normalized
+            let mangaTitle = mangaName ?? url.deletingPathExtension().lastPathComponent
+
+            let fileManager = FileManager.default
+            let localFolder = fileManager.documentDirectory.appendingPathComponent("Local", isDirectory: true)
+            localFolder.createDirectory()
+            let mangaFolder = localFolder.appendingPathComponent(resolvedMangaId, isDirectory: true)
+            mangaFolder.createDirectory()
+
+            let chapterNumber: Float = if volume == nil && chapter == nil {
+                if let mangaId {
+                    await LocalFileDataManager.shared.getNextChapterNumber(series: mangaId) ?? Float(1)
+                } else {
+                    Float(1)
+                }
+            } else {
+                chapter ?? Float(1)
+            }
+
+            let destURL: URL
+            if skipUpload {
+                destURL = url
+            } else {
+                var newDestURL = mangaFolder.appendingPathComponent(url.lastPathComponent)
+                var counter = 1
+                while newDestURL.exists {
+                    let name = url.deletingPathExtension().lastPathComponent + " (\(counter)).\(url.pathExtension)"
+                    newDestURL = mangaFolder.appendingPathComponent(name)
+                    counter += 1
+                }
+                destURL = newDestURL
+                do {
+                    try fileManager.copyItem(at: url, to: destURL)
+                } catch {
+                    throw LocalFileManagerError.fileCopyFailed
+                }
+            }
+
+            var coverURL: URL? = nil
+            if let mangaCoverImage {
+                let coverFileName = "cover.png"
+                let newCoverURL = mangaFolder.appendingPathComponent(coverFileName)
+                if newCoverURL.exists { try? fileManager.removeItem(at: newCoverURL) }
+                try? mangaCoverImage.pngData()?.write(to: newCoverURL)
+                coverURL = newCoverURL
+            } else if ext == "epub" {
+                if let book = try? EpubParser.parse(url: destURL), let cover = book.coverImage {
+                    let newCoverURL = mangaFolder.appendingPathComponent("cover.png")
+                    if newCoverURL.exists { try? fileManager.removeItem(at: newCoverURL) }
+                    try? cover.pngData()?.write(to: newCoverURL)
+                    coverURL = newCoverURL
+                }
+            }
+
+            let hasMangaObject = if let mangaId {
+                await LocalFileDataManager.shared.hasSeries(id: mangaId)
+            } else {
+                false
+            }
+            if !hasMangaObject {
+                await LocalFileDataManager.shared.createSeries(
+                    id: resolvedMangaId,
+                    title: mangaTitle,
+                    description: mangaDescription,
+                    coverUrl: coverURL?.relativePath(to: documentsDirectory)
+                )
+            }
+            await LocalFileDataManager.shared.createChapter(
+                mangaId: resolvedMangaId,
+                id: destURL.lastPathComponent,
+                title: chapterName ?? url.deletingPathExtension().lastPathComponent,
+                volume: volume,
+                chapter: chapterNumber,
+                archivePath: destURL.relativePath(to: documentsDirectory)
+            )
+            return
         }
 
         // read zip file

@@ -17,9 +17,11 @@ struct EpubReaderView: View {
     @AppStorage("Reader.ebookFontSize") private var fontSize: Double = 18.0
     @AppStorage("Reader.ebookLineSpacing") private var lineSpacing: Double = 1.6
     @AppStorage(ReaderTextTheme.userDefaultsKey) private var textThemeRaw = ReaderTextTheme.default.rawValue
+    @AppStorage("Reader.ebookBookmarks") private var bookmarksData: Data = Data()
 
     // MARK: - Navigation & Controls State
     @State private var showTocSheet = false
+    @State private var showSettingsSheet = false
     @State private var showControls = false
 
     private var readingMode: EbookReadingMode {
@@ -36,6 +38,23 @@ struct EpubReaderView: View {
         return book.chapters[currentChapterIndex]
     }
 
+    private var remainingChapters: Int {
+        max(0, book.chapters.count - (currentChapterIndex + 1))
+    }
+
+    private var bookmarks: [EbookBookmark] {
+        get {
+            (try? JSONDecoder().decode([EbookBookmark].self, from: bookmarksData)) ?? []
+        }
+        set {
+            bookmarksData = (try? JSONEncoder().encode(newValue)) ?? Data()
+        }
+    }
+
+    private var isCurrentChapterBookmarked: Bool {
+        bookmarks.contains { $0.chapterIndex == currentChapterIndex }
+    }
+
     var body: some View {
         ZStack {
             Color(theme.backgroundColor)
@@ -45,16 +64,20 @@ struct EpubReaderView: View {
                 emptyView
             } else {
                 VStack(spacing: 0) {
-                    // 顶部简要章节状态
-                    headerBar
+                    // 顶部 Apple Books 风格胶囊：剩余章节
+                    AppleBooksTopPill(remainingPages: remainingChapters)
+                        .padding(.top, 10)
+                        .opacity(showControls ? 0.4 : 0.85)
 
-                    // 章节内容展示容器
+                    // 章节网页富文本呈现容器
                     if let chapter = currentChapter {
                         EpubHtmlWebView(
                             html: styledHtml(for: chapter),
                             baseURL: book.baseDirectory,
                             onCenterTap: {
-                                withAnimation { showControls.toggle() }
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    showControls.toggle()
+                                }
                             },
                             onLeftTap: {
                                 previousChapter()
@@ -66,167 +89,100 @@ struct EpubReaderView: View {
                         .id("\(currentChapterIndex)_\(textThemeRaw)_\(fontSize)")
                     }
 
-                    // 底部简要进度
-                    footerBar
+                    // 底部 Apple Books 风格胶囊：当前/总章节
+                    AppleBooksBottomPill(
+                        currentPage: currentChapterIndex + 1,
+                        totalPages: book.chapters.count
+                    )
+                    .padding(.bottom, 12)
+                    .opacity(showControls ? 0.4 : 0.85)
                 }
 
-                // 悬浮工具浮层
+                // 悬浮交互浮层 (Apple Books Quick Menu & Bottom Bar)
                 if showControls {
                     controlsOverlay
                 }
             }
         }
         .sheet(isPresented: $showTocSheet) {
-            tocSheetView
+            let chapterItems = book.chapters.map {
+                (id: $0.id, title: $0.title, page: max(1, $0.id * 10 + 1))
+            }
+            AppleBooksTocSheet(
+                bookTitle: book.title,
+                currentChapterIndex: currentChapterIndex,
+                currentPageIndex: currentChapterIndex,
+                totalPages: book.chapters.count,
+                chapters: chapterItems,
+                bookmarks: bookmarks,
+                onSelectChapter: { newIndex in
+                    currentChapterIndex = newIndex
+                },
+                onSelectBookmark: { bookmark in
+                    currentChapterIndex = bookmark.chapterIndex
+                },
+                onDeleteBookmark: { bookmark in
+                    var currentList = bookmarks
+                    currentList.removeAll { $0.id == bookmark.id }
+                    bookmarks = currentList
+                }
+            )
+        }
+        .sheet(isPresented: $showSettingsSheet) {
+            AppleBooksThemeSettingsSheet(
+                fontSize: $fontSize,
+                textThemeRaw: $textThemeRaw,
+                readingMode: Binding(
+                    get: { readingMode },
+                    set: { readingModeRaw = $0.rawValue }
+                )
+            )
         }
     }
 
-    // MARK: - Header & Footer Bars
-    private var headerBar: some View {
-        HStack {
-            Text(currentChapter?.title ?? book.title)
-                .font(.caption)
-                .foregroundStyle(Color(theme.textColor).opacity(0.6))
-                .lineLimit(1)
-            Spacer()
-            Text("第 \(currentChapterIndex + 1) / \(book.chapters.count) 章")
-                .font(.caption2)
-                .foregroundStyle(Color(theme.textColor).opacity(0.5))
-        }
-        .padding(.horizontal, 20)
-        .padding(.top, 6)
-        .padding(.bottom, 4)
-    }
-
-    private var footerBar: some View {
-        HStack {
-            Text(book.title)
-                .font(.caption2)
-                .foregroundStyle(Color(theme.textColor).opacity(0.4))
-                .lineLimit(1)
-            Spacer()
-            Text("\(Int(Double(currentChapterIndex + 1) / Double(max(1, book.chapters.count)) * 100))%")
-                .font(.caption2)
-                .foregroundStyle(Color(theme.textColor).opacity(0.5))
-        }
-        .padding(.horizontal, 20)
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Controls Overlay
+    // MARK: - Apple Books Controls Overlay
     private var controlsOverlay: some View {
         VStack {
-            // 顶部栏
-            HStack {
-                Button {
-                    showTocSheet = true
-                } label: {
-                    Image(systemName: "list.bullet")
-                        .font(.system(size: 18))
-                        .padding(10)
-                        .background(.ultraThinMaterial, in: Circle())
-                }
-
-                Spacer()
-
-                // 阅读模式切换
-                Button {
-                    readingModeRaw = (readingMode == .paged ? EbookReadingMode.scroll : .paged).rawValue
-                } label: {
-                    HStack(spacing: 4) {
-                        Image(systemName: readingMode == .paged ? "book.pages" : "scroll")
-                        Text(readingMode.title)
-                            .font(.caption.weight(.medium))
-                    }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(.ultraThinMaterial, in: Capsule())
-                }
-
-                // 字号切换
-                HStack(spacing: 8) {
-                    Button {
-                        if fontSize > 12 { fontSize -= 1 }
-                    } label: {
-                        Image(systemName: "textformat.size.smaller")
-                            .padding(8)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-
-                    Button {
-                        if fontSize < 32 { fontSize += 1 }
-                    } label: {
-                        Image(systemName: "textformat.size.larger")
-                            .padding(8)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.top, 10)
-
             Spacer()
 
-            // 底部章节快切滑块
-            VStack(spacing: 12) {
-                HStack {
-                    Button("上一章") {
-                        previousChapter()
+            // 右下角悬浮快捷菜单 (目录 / 搜索 / 主题与设置)
+            HStack {
+                Spacer()
+                AppleBooksQuickMenu(
+                    onOpenToc: {
+                        showTocSheet = true
+                    },
+                    onOpenSearch: {
+                        showTocSheet = true
+                    },
+                    onOpenSettings: {
+                        showSettingsSheet = true
                     }
-                    .disabled(currentChapterIndex <= 0)
-
-                    Slider(
-                        value: Binding(
-                            get: { Double(currentChapterIndex) },
-                            set: { currentChapterIndex = Int($0) }
-                        ),
-                        in: 0...Double(max(0, book.chapters.count - 1)),
-                        step: 1
-                    )
-
-                    Button("下一章") {
-                        nextChapter()
-                    }
-                    .disabled(currentChapterIndex >= book.chapters.count - 1)
-                }
-                .font(.footnote)
+                )
             }
-            .padding(14)
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.trailing, 20)
+            .padding(.bottom, 12)
+
+            // 底部悬浮操作胶囊 (分享 / 模式 / 书签)
+            AppleBooksBottomBar(
+                isBookmarked: Binding(
+                    get: { isCurrentChapterBookmarked },
+                    set: { _ in toggleBookmark() }
+                ),
+                readingMode: Binding(
+                    get: { readingMode },
+                    set: { readingModeRaw = $0.rawValue }
+                ),
+                onShare: {
+                    shareCurrentBook()
+                },
+                onToggleBookmark: {
+                    toggleBookmark()
+                }
+            )
+            .padding(.bottom, 24)
         }
-    }
-
-    // MARK: - Table of Contents Sheet
-    private var tocSheetView: some View {
-        PlatformNavigationStack {
-            List(book.chapters) { chapter in
-                Button {
-                    currentChapterIndex = chapter.id
-                    showTocSheet = false
-                } label: {
-                    HStack {
-                        Text(chapter.title)
-                            .foregroundStyle(chapter.id == currentChapterIndex ? Color.accentColor : Color.primary)
-                        Spacer()
-                        if chapter.id == currentChapterIndex {
-                            Image(systemName: "checkmark")
-                                .foregroundStyle(Color.accentColor)
-                        }
-                    }
-                }
-            }
-            .navigationTitle("目录 (\(book.chapters.count))")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    Button("完成") {
-                        showTocSheet = false
-                    }
-                }
-            }
-        }
+        .transition(.opacity.combined(with: .scale(scale: 0.96)))
     }
 
     private var emptyView: some View {
@@ -253,6 +209,33 @@ struct EpubReaderView: View {
         }
     }
 
+    private func toggleBookmark() {
+        var currentList = bookmarks
+        if let index = currentList.firstIndex(where: { $0.chapterIndex == currentChapterIndex }) {
+            currentList.remove(at: index)
+        } else {
+            let preview = currentChapter?.plainTextContent.prefix(80) ?? ""
+            let newBookmark = EbookBookmark(
+                chapterIndex: currentChapterIndex,
+                chapterTitle: currentChapter?.title ?? "第 \(currentChapterIndex + 1) 章",
+                pageIndex: currentChapterIndex,
+                pageDisplay: currentChapterIndex + 1,
+                previewText: String(preview)
+            )
+            currentList.append(newBookmark)
+        }
+        bookmarks = currentList
+    }
+
+    private func shareCurrentBook() {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let rootVC = windowScene.windows.first?.rootViewController else { return }
+
+        let shareText = "正在阅读《\(book.title)》- \(currentChapter?.title ?? "")"
+        let activityVC = UIActivityViewController(activityItems: [shareText], applicationActivities: nil)
+        rootVC.present(activityVC, animated: true)
+    }
+
     // MARK: - CSS Injected HTML Builder
     private func styledHtml(for chapter: EpubChapter) -> String {
         let bgColor = hexString(from: theme.backgroundColor)
@@ -266,7 +249,7 @@ struct EpubReaderView: View {
                 font-size: \(fontSize)px !important;
                 line-height: \(lineSpacing) !important;
                 font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-                padding: 12px 18px 48px 18px !important;
+                padding: 16px 22px 64px 22px !important;
                 margin: 0 !important;
                 word-wrap: break-word !important;
                 -webkit-text-size-adjust: 100% !important;
@@ -275,11 +258,11 @@ struct EpubReaderView: View {
                 max-width: 100% !important;
                 height: auto !important;
                 display: block !important;
-                margin: 12px auto !important;
+                margin: 14px auto !important;
                 border-radius: 8px !important;
             }
             p {
-                margin: 0 0 1em 0 !important;
+                margin: 0 0 1.1em 0 !important;
                 text-indent: 2em !important;
             }
             h1, h2, h3, h4, h5, h6 {

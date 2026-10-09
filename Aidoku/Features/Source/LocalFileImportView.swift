@@ -134,7 +134,13 @@ extension LocalFileImportView.ContentView {
             }
             .sheet(isPresented: $importing) {
                 DocumentPickerView(
-                    allowedContentTypes: [.init(filenameExtension: "cbz")!, .zip],
+                    allowedContentTypes: [
+                        .init(filenameExtension: "cbz")!,
+                        .zip,
+                        .init(filenameExtension: "epub") ?? .data,
+                        .plainText,
+                        .init(filenameExtension: "txt") ?? .plainText
+                    ],
                     onDocumentsPicked: { urls in
                         guard let url = urls.first else {
                             loadingImport = false

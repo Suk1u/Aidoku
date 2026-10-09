@@ -24,12 +24,14 @@ enum LocalFileType {
     case cbz
     case zip
     case epub
+    case txt
 
     var localizedName: String {
         switch self {
             case .cbz: NSLocalizedString("CBZ_NAME")
             case .zip: NSLocalizedString("ZIP_NAME")
-            case .epub: NSLocalizedString("EPUB_NAME")
+            case .epub: "EPUB"
+            case .txt: "TXT"
         }
     }
 }
