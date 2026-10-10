@@ -181,7 +181,7 @@ struct EpubReaderView: View {
                 VStack(alignment: .leading, spacing: 0) {
                     if currentPageIndex == 0, let title = currentChapter?.title {
                         Text(title)
-                            .font(.system(.title3, design: .serif, weight: .bold))
+                            .font(.title3.weight(.bold))
                             .foregroundStyle(Color(theme.textColor))
                             .padding(.bottom, 16)
                     }
@@ -205,7 +205,7 @@ struct EpubReaderView: View {
             VStack(alignment: .leading, spacing: 16) {
                 if let chapter = currentChapter {
                     Text(chapter.title)
-                        .font(.system(.title2, design: .serif, weight: .bold))
+                        .font(.title2.weight(.bold))
                         .foregroundStyle(Color(theme.textColor))
                         .padding(.bottom, 12)
 
@@ -374,7 +374,7 @@ struct EpubReaderView: View {
         } else {
             let preview = pagedContent.indices.contains(currentPageIndex)
                 ? String(pagedContent[currentPageIndex].prefix(80))
-                : (currentChapter?.plainTextContent.prefix(80).map { String($0) } ?? "")
+                : (currentChapter.map { String($0.plainTextContent.prefix(80)) } ?? "")
             let newBookmark = EbookBookmark(
                 chapterIndex: currentChapterIndex,
                 chapterTitle: currentChapter?.title ?? "第 \(currentChapterIndex + 1) 章",

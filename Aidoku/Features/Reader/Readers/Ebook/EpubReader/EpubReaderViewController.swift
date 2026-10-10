@@ -67,6 +67,7 @@ final class EpubReaderViewController: UIViewController, ReaderReaderDelegate {
                 author: manga.authors?.joined(separator: ", ") ?? "作者",
                 coverImage: nil,
                 chapters: [defaultChapter],
+                tocItems: [EpubTocItem(id: 0, title: defaultTitle, href: "chapter_0.xhtml", chapterIndex: 0)],
                 baseDirectory: nil
             )
         }

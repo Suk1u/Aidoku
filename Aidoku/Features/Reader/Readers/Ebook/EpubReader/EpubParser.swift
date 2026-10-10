@@ -247,10 +247,10 @@ final class EpubParser {
         if let navHref {
             let navUrl = opfDir.appendingPathComponent(navHref)
             if let navXml = try? String(contentsOf: navUrl, encoding: .utf8),
-               let navDoc = try? SwiftSoup.parse(navXml) {
-                let navLinks = try? navDoc.select("nav[epub\\:type='toc'] a, nav#toc a, nav a")
+               let navDoc = try? SwiftSoup.parse(navXml),
+               let navLinks = try? navDoc.select("nav[epub\\:type='toc'] a, nav#toc a, nav a") {
                 var tocIndex = 0
-                for a in navLinks ?? [] {
+                for a in navLinks {
                     let title = (try? a.text()) ?? ""
                     let href = (try? a.attr("href")) ?? ""
                     let cleanHref = href.components(separatedBy: "#").first ?? href
@@ -267,10 +267,10 @@ final class EpubParser {
         if tocItems.isEmpty, let ncxHref {
             let ncxUrl = opfDir.appendingPathComponent(ncxHref)
             if let ncxXml = try? String(contentsOf: ncxUrl, encoding: .utf8),
-               let ncxDoc = try? SwiftSoup.parse(ncxXml, "", Parser.xmlParser()) {
-                let navPoints = try? ncxDoc.select("navPoint")
+               let ncxDoc = try? SwiftSoup.parse(ncxXml, "", Parser.xmlParser()),
+               let navPoints = try? ncxDoc.select("navPoint") {
                 var tocIndex = 0
-                for point in navPoints ?? [] {
+                for point in navPoints {
                     let title = (try? point.select("navLabel > text").text()) ?? ""
                     let src = (try? point.select("content").attr("src")) ?? ""
                     let cleanHref = src.components(separatedBy: "#").first ?? src

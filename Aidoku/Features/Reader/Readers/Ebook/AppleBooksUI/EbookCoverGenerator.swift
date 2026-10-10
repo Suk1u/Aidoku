@@ -39,7 +39,7 @@ final class EbookCoverGenerator {
             let spineWidth: CGFloat = 16
             let spineRect = CGRect(x: 0, y: 0, width: spineWidth, height: size.height)
             UIColor.white.withAlphaComponent(0.05).setFill()
-            UIRectFillUsingBlendMode(spineRect, .sourceOver)
+            UIRectFill(spineRect)
 
             let spineLine = CGRect(x: spineWidth, y: 0, width: 1.5, height: size.height)
             UIColor.black.withAlphaComponent(0.4).setFill()

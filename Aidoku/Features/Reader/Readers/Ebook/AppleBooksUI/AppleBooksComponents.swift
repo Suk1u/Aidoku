@@ -113,7 +113,7 @@ struct AppleBooksQuickMenu: View {
                         .font(.system(.body, design: .default))
                     Spacer()
                     Text("大小")
-                        .font(.system(.caption, design: .default, weight: .semibold))
+                        .font(.caption.weight(.semibold))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
                         .background(Color.secondary.opacity(0.18), in: RoundedRectangle(cornerRadius: 6, style: .continuous))
@@ -312,7 +312,7 @@ struct AppleBooksTocSheet: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 HStack {
                                     Text(bookmark.chapterTitle)
-                                        .font(.system(.body, design: .default, weight: .medium))
+                                        .font(.body.weight(.medium))
                                     Spacer()
                                     Text("第 \(bookmark.pageDisplay) 页")
                                         .font(.system(.caption, design: .default))
@@ -381,14 +381,14 @@ struct AppleBooksThemeSettingsSheet: View {
                         Image(systemName: "textformat.size.smaller")
                         Text("小")
                     }
-                    .font(.system(.subheadline, design: .default, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 44)
                     .background(Color.secondary.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 }
 
                 Text("\(Int(fontSize))")
-                    .font(.system(.title3, design: .default, weight: .bold))
+                    .font(.title3.weight(.bold))
                     .frame(width: 48)
 
                 Button {
@@ -398,7 +398,7 @@ struct AppleBooksThemeSettingsSheet: View {
                         Text("大")
                         Image(systemName: "textformat.size.larger")
                     }
-                    .font(.system(.subheadline, design: .default, weight: .medium))
+                    .font(.subheadline.weight(.medium))
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 44)
                     .background(Color.secondary.opacity(0.16), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
@@ -425,7 +425,7 @@ struct AppleBooksThemeSettingsSheet: View {
                             )
                             .overlay(
                                 Text("Aa")
-                                    .font(.system(.subheadline, design: .default, weight: .bold))
+                                    .font(.subheadline.weight(.bold))
                                     .foregroundStyle(Color(theme.textColor))
                             )
                     }
@@ -443,7 +443,7 @@ struct AppleBooksThemeSettingsSheet: View {
                         Image(systemName: "book.pages")
                         Text("左右翻页")
                     }
-                    .font(.system(.body, design: .default, weight: .medium))
+                    .font(.body.weight(.medium))
                     .foregroundStyle(readingMode == .paged ? Color.accentColor : Color.primary)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 48)
@@ -460,7 +460,7 @@ struct AppleBooksThemeSettingsSheet: View {
                         Image(systemName: "scroll")
                         Text("连续滚动")
                     }
-                    .font(.system(.body, design: .default, weight: .medium))
+                    .font(.body.weight(.medium))
                     .foregroundStyle(readingMode == .scroll ? Color.accentColor : Color.primary)
                     .frame(maxWidth: .infinity)
                     .frame(minHeight: 48)
