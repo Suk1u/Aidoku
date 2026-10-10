@@ -61,7 +61,7 @@ extension View {
 
         VStack(spacing: 24) {
             Text("本章还剩 18 页")
-                .font(.system(.footnote, design: .default, weight: .medium))
+                .font(.footnote.weight(.medium))
                 .padding(.horizontal, 16)
                 .padding(.vertical, 8)
                 .liquidGlassPill()

@@ -42,7 +42,7 @@ struct AppleBooksTopPill: View {
 
     var body: some View {
         Text("本章还剩 \(max(0, remainingPages)) 页")
-            .font(.system(.footnote, design: .default, weight: .medium))
+            .font(.footnote.weight(.medium))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
@@ -57,7 +57,7 @@ struct AppleBooksBottomPill: View {
 
     var body: some View {
         Text("\(currentPage)/\(max(1, totalPages)) 页")
-            .font(.system(.footnote, design: .default, weight: .medium))
+            .font(.footnote.weight(.medium))
             .foregroundStyle(.secondary)
             .padding(.horizontal, 16)
             .padding(.vertical, 8)
