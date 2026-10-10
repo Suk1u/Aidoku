@@ -2,24 +2,28 @@
 //  EpubReaderView.swift
 //  Aidoku
 //
-//  Created by Antigravity on 10/9/26.
+//  Created by Antigravity on 10/10/26.
 //
 
 import SwiftUI
-import WebKit
 
+/// 纯原生 SwiftUI EPUB 电子书阅读器（iOS 26+ 原生 Liquid Glass 界面与 Apple HIG 规范）
+/// 彻底移除 WKWebView / HTML / CSS / Tailwind，仅使用系统原生排版与液态玻璃材质
 struct EpubReaderView: View {
     let book: EpubBook
     @State var currentChapterIndex: Int = 0
 
-    // MARK: - Reading Mode & Typography Settings
+    // MARK: - 阅读模式与排版参数
     @AppStorage("Reader.ebookReadingMode") private var readingModeRaw = EbookReadingMode.paged.rawValue
     @AppStorage("Reader.ebookFontSize") private var fontSize: Double = 18.0
-    @AppStorage("Reader.ebookLineSpacing") private var lineSpacing: Double = 1.6
+    @AppStorage("Reader.ebookLineSpacing") private var lineSpacing: Double = 8.0
     @AppStorage(ReaderTextTheme.userDefaultsKey) private var textThemeRaw = ReaderTextTheme.default.rawValue
     @AppStorage("Reader.ebookBookmarks") private var bookmarksData: Data = Data()
 
-    // MARK: - Navigation & Controls State
+    // MARK: - 页面与交互状态
+    @State private var currentPageIndex: Int = 0
+    @State private var pagedContent: [String] = []
+    @State private var bookmarks: [EbookBookmark] = []
     @State private var showTocSheet = false
     @State private var showSettingsSheet = false
     @State private var showControls = false
@@ -38,86 +42,88 @@ struct EpubReaderView: View {
         return book.chapters[currentChapterIndex]
     }
 
-    private var remainingChapters: Int {
-        max(0, book.chapters.count - (currentChapterIndex + 1))
+    private var remainingPagesInChapter: Int {
+        if readingMode == .paged {
+            return max(0, pagedContent.count - (currentPageIndex + 1))
+        } else {
+            return max(0, book.chapters.count - (currentChapterIndex + 1))
+        }
     }
 
-    @State private var bookmarks: [EbookBookmark] = []
-
-    private var isCurrentChapterBookmarked: Bool {
-        bookmarks.contains { $0.chapterIndex == currentChapterIndex }
+    private var isCurrentPageBookmarked: Bool {
+        bookmarks.contains {
+            $0.chapterIndex == currentChapterIndex && $0.pageIndex == currentPageIndex
+        }
     }
 
     var body: some View {
         ZStack {
+            // 背景纸张底色
             Color(theme.backgroundColor)
                 .ignoresSafeArea()
 
             if book.chapters.isEmpty {
-                emptyView
+                emptyStateView
             } else {
                 VStack(spacing: 0) {
-                    // 顶部 Apple Books 风格胶囊：剩余章节
-                    AppleBooksTopPill(remainingPages: remainingChapters)
-                        .padding(.top, 10)
-                        .opacity(showControls ? 0.4 : 0.85)
+                    // MARK: 顶部安全区液态玻璃胶囊「本章还剩 X 页」
+                    topPillView
+                        .padding(.top, 8)
+                        .padding(.bottom, 8)
 
-                    // 章节网页富文本呈现容器
-                    if let chapter = currentChapter {
-                        EpubHtmlWebView(
-                            html: styledHtml(for: chapter),
-                            baseURL: book.baseDirectory,
-                            onCenterTap: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    showControls.toggle()
-                                }
-                            },
-                            onLeftTap: {
-                                previousChapter()
-                            },
-                            onRightTap: {
-                                nextChapter()
-                            }
-                        )
-                        .id("\(currentChapterIndex)_\(textThemeRaw)_\(fontSize)")
+                    // MARK: 原生排版主阅读内容区
+                    Group {
+                        if readingMode == .paged {
+                            nativePagedContentView
+                        } else {
+                            nativeScrollContentView
+                        }
                     }
-
-                    // 底部 Apple Books 风格胶囊：当前/总章节
-                    AppleBooksBottomPill(
-                        currentPage: currentChapterIndex + 1,
-                        totalPages: book.chapters.count
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .contentShape(Rectangle())
+                    .simultaneousGesture(
+                        DragGesture(minimumDistance: 0)
+                            .onEnded { value in
+                                handleScreenTap(at: value.location)
+                            }
                     )
-                    .padding(.bottom, 12)
-                    .opacity(showControls ? 0.4 : 0.85)
+
+                    // MARK: 底部安全区液态玻璃胶囊「当前页/总页数」
+                    bottomPillView
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
                 }
 
-                // 悬浮交互浮层 (Apple Books Quick Menu & Bottom Bar)
+                // MARK: 悬浮 Liquid Glass 控件层 (呼出状态)
                 if showControls {
-                    controlsOverlay
+                    liquidGlassControlsOverlay
                 }
             }
         }
         .sheet(isPresented: $showTocSheet) {
-            let chapterItems = book.chapters.map {
-                (id: $0.id, title: $0.title, page: max(1, $0.id * 10 + 1))
-            }
+            let tocItems = book.tocItems.isEmpty
+                ? book.chapters.map { (id: $0.id, title: $0.title, page: max(1, $0.id + 1)) }
+                : book.tocItems.map { (id: $0.id, title: $0.title, page: max(1, $0.chapterIndex + 1)) }
+
             AppleBooksTocSheet(
                 bookTitle: book.title,
                 currentChapterIndex: currentChapterIndex,
-                currentPageIndex: currentChapterIndex,
-                totalPages: book.chapters.count,
-                chapters: chapterItems,
+                currentPageIndex: currentPageIndex,
+                totalPages: max(1, pagedContent.count),
+                chapters: tocItems,
                 bookmarks: bookmarks,
                 onSelectChapter: { newIndex in
                     currentChapterIndex = newIndex
+                    currentPageIndex = 0
+                    paginateCurrentChapter()
                 },
                 onSelectBookmark: { bookmark in
                     currentChapterIndex = bookmark.chapterIndex
+                    currentPageIndex = bookmark.pageIndex
+                    paginateCurrentChapter()
                 },
                 onDeleteBookmark: { bookmark in
-                    var currentList = bookmarks
-                    currentList.removeAll { $0.id == bookmark.id }
-                    bookmarks = currentList
+                    bookmarks.removeAll { $0.id == bookmark.id }
                 }
             )
         }
@@ -135,20 +141,122 @@ struct EpubReaderView: View {
             if let decoded = try? JSONDecoder().decode([EbookBookmark].self, from: bookmarksData) {
                 bookmarks = decoded
             }
+            paginateCurrentChapter()
         }
         .onChange(of: bookmarks) { newBookmarks in
             if let encoded = try? JSONEncoder().encode(newBookmarks) {
                 bookmarksData = encoded
             }
         }
+        .onChange(of: currentChapterIndex) { _ in
+            currentPageIndex = 0
+            paginateCurrentChapter()
+        }
+        .onChange(of: fontSize) { _ in
+            paginateCurrentChapter()
+        }
     }
 
-    // MARK: - Apple Books Controls Overlay
-    private var controlsOverlay: some View {
-        VStack {
+    // MARK: - 顶部与底部液态玻璃胶囊
+    @ViewBuilder
+    private var topPillView: some View {
+        AppleBooksTopPill(remainingPages: remainingPagesInChapter)
+            .opacity(showControls ? 0.35 : 0.9)
+            .animation(.easeInOut(duration: 0.2), value: showControls)
+    }
+
+    @ViewBuilder
+    private var bottomPillView: some View {
+        let currentDisplay = readingMode == .paged ? currentPageIndex + 1 : currentChapterIndex + 1
+        let totalDisplay = readingMode == .paged ? max(1, pagedContent.count) : max(1, book.chapters.count)
+        AppleBooksBottomPill(currentPage: currentDisplay, totalPages: totalDisplay)
+            .opacity(showControls ? 0.35 : 0.9)
+            .animation(.easeInOut(duration: 0.2), value: showControls)
+    }
+
+    // MARK: - 左右仿真翻页视图 (纯原生 SwiftUI 渲染)
+    private var nativePagedContentView: some View {
+        GeometryReader { _ in
+            if !pagedContent.isEmpty && currentPageIndex < pagedContent.count {
+                VStack(alignment: .leading, spacing: 0) {
+                    if currentPageIndex == 0, let title = currentChapter?.title {
+                        Text(title)
+                            .font(.system(.title3, design: .serif, weight: .bold))
+                            .foregroundStyle(Color(theme.textColor))
+                            .padding(.bottom, 16)
+                    }
+
+                    Text(pagedContent[currentPageIndex])
+                        .font(.system(size: fontSize, design: .serif))
+                        .lineSpacing(lineSpacing)
+                        .foregroundStyle(Color(theme.textColor))
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 8)
+            }
+        }
+    }
+
+    // MARK: - 连续垂直滚动视图 (纯原生 SwiftUI 渲染)
+    private var nativeScrollContentView: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                if let chapter = currentChapter {
+                    Text(chapter.title)
+                        .font(.system(.title2, design: .serif, weight: .bold))
+                        .foregroundStyle(Color(theme.textColor))
+                        .padding(.bottom, 12)
+
+                    let paragraphs = chapter.plainTextContent
+                        .components(separatedBy: "\n")
+                        .filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+
+                    ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, para in
+                        Text("　　" + para.trimmingCharacters(in: .whitespaces))
+                            .font(.system(size: fontSize, design: .serif))
+                            .lineSpacing(lineSpacing)
+                            .foregroundStyle(Color(theme.textColor))
+                            .multilineTextAlignment(.leading)
+                            .padding(.bottom, 6)
+                    }
+                }
+
+                // 章节快速跳转操作按钮
+                HStack(spacing: 16) {
+                    if currentChapterIndex > 0 {
+                        Button("上一章") {
+                            currentChapterIndex -= 1
+                        }
+                        .higTouchTarget()
+                        .buttonStyle(.bordered)
+                    }
+
+                    Spacer()
+
+                    if currentChapterIndex < book.chapters.count - 1 {
+                        Button("下一章") {
+                            currentChapterIndex += 1
+                        }
+                        .higTouchTarget()
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding(.top, 24)
+                .padding(.bottom, 64)
+            }
+            .padding(.horizontal, 24)
+            .padding(.vertical, 16)
+        }
+    }
+
+    // MARK: - Liquid Glass 原生悬浮控件浮层
+    private var liquidGlassControlsOverlay: some View {
+        VStack(spacing: 16) {
             Spacer()
 
-            // 右下角悬浮快捷菜单 (目录 / 搜索 / 主题与设置)
+            // 右下角多功能快捷液态玻璃菜单
             HStack {
                 Spacer()
                 AppleBooksQuickMenu(
@@ -163,13 +271,12 @@ struct EpubReaderView: View {
                     }
                 )
             }
-            .padding(.trailing, 20)
-            .padding(.bottom, 12)
+            .padding(.trailing, 24)
 
-            // 底部悬浮操作胶囊 (分享 / 模式 / 书签)
+            // 底部横向液态玻璃操作条 (分享、阅读模式、书签)
             AppleBooksBottomBar(
                 isBookmarked: Binding(
-                    get: { isCurrentChapterBookmarked },
+                    get: { isCurrentPageBookmarked },
                     set: { _ in toggleBookmark() }
                 ),
                 readingMode: Binding(
@@ -185,174 +292,125 @@ struct EpubReaderView: View {
             )
             .padding(.bottom, 24)
         }
-        .transition(.opacity.combined(with: .scale(scale: 0.96)))
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
 
-    private var emptyView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "books.vertical")
-                .font(.system(size: 48))
+    // MARK: - 空状态视图
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "book.closed")
+                .font(.system(size: 48, weight: .light))
                 .foregroundStyle(.secondary)
-            Text("无可用章节")
-                .font(.headline)
+            Text("无可用书籍内容")
+                .font(.system(.headline, design: .default))
                 .foregroundStyle(.secondary)
         }
     }
 
-    // MARK: - Actions
-    private func previousChapter() {
-        if currentChapterIndex > 0 {
-            currentChapterIndex -= 1
+    // MARK: - 逻辑与辅助动作
+    private func paginateCurrentChapter() {
+        guard let content = currentChapter?.plainTextContent else {
+            pagedContent = []
+            return
+        }
+        let baseChars = 700
+        let factor = max(0.5, 18.0 / fontSize)
+        let charsPerPage = Int(Double(baseChars) * factor)
+        pagedContent = TxtParser.paginate(content: content, charsPerPage: charsPerPage)
+        if currentPageIndex >= pagedContent.count {
+            currentPageIndex = max(0, pagedContent.count - 1)
         }
     }
 
-    private func nextChapter() {
-        if currentChapterIndex < book.chapters.count - 1 {
-            currentChapterIndex += 1
+    private func handleScreenTap(at location: CGPoint) {
+        let screenWidth = UIScreen.main.bounds.width
+        let tapThreshold = screenWidth * 0.30
+
+        if location.x < tapThreshold {
+            if readingMode == .paged {
+                turnPage(forward: false)
+            } else {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    showControls.toggle()
+                }
+            }
+        } else if location.x > screenWidth - tapThreshold {
+            if readingMode == .paged {
+                turnPage(forward: true)
+            } else {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    showControls.toggle()
+                }
+            }
+        } else {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                showControls.toggle()
+            }
+        }
+    }
+
+    private func turnPage(forward: Bool) {
+        if forward {
+            if currentPageIndex < pagedContent.count - 1 {
+                currentPageIndex += 1
+            } else if currentChapterIndex < book.chapters.count - 1 {
+                currentChapterIndex += 1
+                currentPageIndex = 0
+            }
+        } else {
+            if currentPageIndex > 0 {
+                currentPageIndex -= 1
+            } else if currentChapterIndex > 0 {
+                currentChapterIndex -= 1
+                paginateCurrentChapter()
+                currentPageIndex = max(0, pagedContent.count - 1)
+            }
         }
     }
 
     private func toggleBookmark() {
-        var currentList = bookmarks
-        if let index = currentList.firstIndex(where: { $0.chapterIndex == currentChapterIndex }) {
-            currentList.remove(at: index)
+        if let index = bookmarks.firstIndex(where: { $0.chapterIndex == currentChapterIndex && $0.pageIndex == currentPageIndex }) {
+            bookmarks.remove(at: index)
         } else {
-            let preview = currentChapter?.plainTextContent.prefix(80) ?? ""
+            let preview = pagedContent.indices.contains(currentPageIndex)
+                ? String(pagedContent[currentPageIndex].prefix(80))
+                : (currentChapter?.plainTextContent.prefix(80).map { String($0) } ?? "")
             let newBookmark = EbookBookmark(
                 chapterIndex: currentChapterIndex,
                 chapterTitle: currentChapter?.title ?? "第 \(currentChapterIndex + 1) 章",
-                pageIndex: currentChapterIndex,
-                pageDisplay: currentChapterIndex + 1,
-                previewText: String(preview)
+                pageIndex: currentPageIndex,
+                pageDisplay: currentPageIndex + 1,
+                previewText: preview
             )
-            currentList.append(newBookmark)
+            bookmarks.append(newBookmark)
         }
-        bookmarks = currentList
     }
 
     private func shareCurrentBook() {
         guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
               let rootVC = windowScene.windows.first?.rootViewController else { return }
 
-        let shareText = "正在阅读《\(book.title)》- \(currentChapter?.title ?? "")"
+        let shareText = "正在阅读《\(book.title)》· \(currentChapter?.title ?? "")"
         let activityVC = UIActivityViewController(activityItems: [shareText], applicationActivities: nil)
         rootVC.present(activityVC, animated: true)
     }
-
-    // MARK: - CSS Injected HTML Builder
-    private func styledHtml(for chapter: EpubChapter) -> String {
-        let bgColor = hexString(from: theme.backgroundColor)
-        let textColor = hexString(from: theme.textColor)
-
-        let injectedCss = """
-        <style>
-            html, body {
-                background-color: \(bgColor) !important;
-                color: \(textColor) !important;
-                font-size: \(fontSize)px !important;
-                line-height: \(lineSpacing) !important;
-                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif !important;
-                padding: 16px 22px 64px 22px !important;
-                margin: 0 !important;
-                word-wrap: break-word !important;
-                -webkit-text-size-adjust: 100% !important;
-            }
-            img {
-                max-width: 100% !important;
-                height: auto !important;
-                display: block !important;
-                margin: 14px auto !important;
-                border-radius: 8px !important;
-            }
-            p {
-                margin: 0 0 1.1em 0 !important;
-                text-indent: 2em !important;
-            }
-            h1, h2, h3, h4, h5, h6 {
-                color: \(textColor) !important;
-                text-align: center !important;
-                margin-top: 1.2em !important;
-                margin-bottom: 0.8em !important;
-            }
-            a {
-                color: #007AFF !important;
-                text-decoration: none !important;
-            }
-        </style>
-        """
-
-        if chapter.htmlContent.contains("<head>") {
-            return chapter.htmlContent.replacingOccurrences(of: "<head>", with: "<head>\(injectedCss)")
-        } else {
-            return "<html><head>\(injectedCss)</head><body>\(chapter.htmlContent)</body></html>"
-        }
-    }
-
-    private func hexString(from color: UIColor) -> String {
-        var r: CGFloat = 0
-        var g: CGFloat = 0
-        var b: CGFloat = 0
-        var a: CGFloat = 0
-        color.getRed(&r, green: &g, blue: &b, alpha: &a)
-        return String(format: "#%02lX%02lX%02lX", lroundf(Float(r * 255)), lroundf(Float(g * 255)), lroundf(Float(b * 255)))
-    }
 }
 
-// MARK: - WKWebView Wrapper with Tap Area Dispatch
-private struct EpubHtmlWebView: UIViewRepresentable {
-    let html: String
-    let baseURL: URL?
-    var onCenterTap: (() -> Void)?
-    var onLeftTap: (() -> Void)?
-    var onRightTap: (() -> Void)?
-
-    func makeUIView(context: Context) -> WKWebView {
-        let config = WKWebViewConfiguration()
-        let webView = WKWebView(frame: .zero, configuration: config)
-        webView.isOpaque = false
-        webView.backgroundColor = .clear
-        webView.scrollView.backgroundColor = .clear
-
-        let tapGesture = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.handleTap(_:)))
-        tapGesture.delegate = context.coordinator
-        webView.addGestureRecognizer(tapGesture)
-
-        return webView
-    }
-
-    func updateUIView(_ webView: WKWebView, context: Context) {
-        context.coordinator.parent = self
-        webView.loadHTMLString(html, baseURL: baseURL)
-    }
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(self)
-    }
-
-    class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var parent: EpubHtmlWebView
-
-        init(_ parent: EpubHtmlWebView) {
-            self.parent = parent
-        }
-
-        @objc func handleTap(_ gesture: UITapGestureRecognizer) {
-            guard let view = gesture.view else { return }
-            let location = gesture.location(in: view)
-            let width = view.bounds.width
-            let tapMargin = width * 0.28
-
-            if location.x < tapMargin {
-                parent.onLeftTap?()
-            } else if location.x > width - tapMargin {
-                parent.onRightTap?()
-            } else {
-                parent.onCenterTap?()
-            }
-        }
-
-        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool {
-            true
-        }
-    }
+#Preview("EpubReaderView Preview") {
+    let sampleChapter = EpubChapter(
+        id: 0,
+        title: "第一章 春日的重逢",
+        href: "chapter1.xhtml",
+        htmlContent: "",
+        plainTextContent: "四月的微风拂过樱花树梢，初升的阳光洒在静谧的街道上。走在通往学园的坂道上，空气中弥漫着青草与花瓣的芬芳。"
+    )
+    let sampleBook = EpubBook(
+        title: "败犬女主太多了！",
+        author: "雨森たきび",
+        coverImage: nil,
+        chapters: [sampleChapter],
+        tocItems: [EpubTocItem(id: 0, title: "第一章 春日的重逢", href: "chapter1.xhtml", chapterIndex: 0)],
+        baseDirectory: nil
+    )
+    EpubReaderView(book: sampleBook)
 }

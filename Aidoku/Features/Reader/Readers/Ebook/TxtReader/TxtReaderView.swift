@@ -168,7 +168,7 @@ struct TxtReaderView: View {
                     .foregroundStyle(Color(theme.textColor))
                     .multilineTextAlignment(.leading)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 26)
+                    .padding(.horizontal, 24)
                     .padding(.vertical, 8)
             }
         }
@@ -211,7 +211,7 @@ struct TxtReaderView: View {
                 .padding(.top, 24)
                 .padding(.bottom, 60)
             }
-            .padding(.horizontal, 26)
+            .padding(.horizontal, 24)
             .padding(.vertical, 16)
         }
     }
@@ -236,8 +236,8 @@ struct TxtReaderView: View {
                     }
                 )
             }
-            .padding(.trailing, 20)
-            .padding(.bottom, 12)
+            .padding(.trailing, 24)
+            .padding(.bottom, 16)
 
             // 底部悬浮操作胶囊 (分享 / 模式 / 书签)
             AppleBooksBottomBar(
@@ -361,4 +361,12 @@ struct TxtReaderView: View {
         let activityVC = UIActivityViewController(activityItems: [text], applicationActivities: nil)
         rootVC.present(activityVC, animated: true)
     }
+}
+
+#Preview("TxtReaderView Preview") {
+    let sampleChapters = [
+        TxtChapter(id: 0, title: "第一章 命运的齿轮", content: "晨光透过薄雾洒向大地的每一个角落，风里夹杂着初夏的暖意。那是故事开始的第一个清晨。"),
+        TxtChapter(id: 1, title: "第二章 悄然启程", content: "少年背起行囊，回望了一眼熟悉的小镇，毅然踏上了未知的旅途。")
+    ]
+    TxtReaderView(chapters: sampleChapters)
 }

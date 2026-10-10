@@ -359,6 +359,12 @@ extension LocalFileManager {
                     try? cover.pngData()?.write(to: newCoverURL)
                     coverURL = newCoverURL
                 }
+            } else if ext == "txt" {
+                let cover = EbookCoverGenerator.generate(title: mangaTitle)
+                let newCoverURL = mangaFolder.appendingPathComponent("cover.png")
+                if newCoverURL.exists { try? fileManager.removeItem(at: newCoverURL) }
+                try? cover.pngData()?.write(to: newCoverURL)
+                coverURL = newCoverURL
             }
 
             let hasMangaObject = if let mangaId {
