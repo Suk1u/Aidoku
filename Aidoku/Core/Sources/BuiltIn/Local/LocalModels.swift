@@ -36,6 +36,12 @@ enum LocalFileType {
     }
 }
 
+struct ImportChapterInfo: Hashable {
+    let id: String
+    let title: String
+    let chapterNumber: Float
+}
+
 struct ImportFileInfo: Hashable {
     let url: URL
     let previewImages: [UIImage]
@@ -43,4 +49,5 @@ struct ImportFileInfo: Hashable {
     let pageCount: Int
     let fileType: LocalFileType
     let comicInfo: ComicInfo?
+    var detectedChapters: [ImportChapterInfo] = []
 }

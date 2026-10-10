@@ -15,8 +15,6 @@ class ReaderViewController: BaseObservingViewController {
         case paged
         case scroll
         case text
-        case epub
-        case txt
     }
 
     let source: AidokuRunner.Source?
@@ -626,10 +624,6 @@ extension ReaderViewController {
         switch reader {
             case is ReaderTextViewController, is ReaderPagedTextViewController:
                 currentReader = .text
-            case is EpubReaderViewController:
-                currentReader = .epub
-            case is TxtReaderViewController:
-                currentReader = .txt
             case is ReaderPagedViewController:
                 currentReader = .paged
             case is ReaderWebtoonViewController:
@@ -644,7 +638,7 @@ extension ReaderViewController {
                 chapterLanguage: chapter.language ?? source?.languages.first
             )
         )
-        if currentReader == .text || currentReader == .epub || currentReader == .txt {
+        if currentReader == .text {
             vc.overrideUserInterfaceStyle = ReaderTextTheme.getInterfaceStyleOverride()
         }
         present(vc, animated: true)
@@ -690,12 +684,6 @@ extension ReaderViewController {
 
 // MARK: - Reading Mode
 extension ReaderViewController {
-    var currentBookType: BookType {
-        let chapterType = chapter.bookType
-        if chapterType != .manga { return chapterType }
-        return manga.bookType
-    }
-
     func setReadingMode(_ mode: String?) {
         switch mode {
             case "rtl": readingMode = .rtl
@@ -729,18 +717,12 @@ extension ReaderViewController {
                 }
         }
 
-        if currentBookType == .epub {
-            setReader(.epub)
-        } else if currentBookType == .txt {
-            setReader(.txt)
-        } else if !(reader is ReaderTextViewController) {
+        if !(reader is ReaderTextViewController) {
             switch readingMode {
                 case .ltr, .rtl, .vertical:
                     setReader(.paged)
                 case .webtoon, .continuous:
                     setReader(.scroll)
-                case .ebookPaged, .ebookScroll:
-                    setReader(.paged)
             }
         }
     }
@@ -786,20 +768,6 @@ extension ReaderViewController {
                     } else {
                         pageController = nil
                     }
-                }
-            case .epub:
-                toolbarView.sliderView.direction = .forward
-                if !(reader is EpubReaderViewController) {
-                    pageController = EpubReaderViewController(source: source, manga: manga, chapter: chapter)
-                } else {
-                    pageController = nil
-                }
-            case .txt:
-                toolbarView.sliderView.direction = .forward
-                if !(reader is TxtReaderViewController) {
-                    pageController = TxtReaderViewController(source: source, manga: manga, chapter: chapter)
-                } else {
-                    pageController = nil
                 }
         }
         if let pageController {
@@ -1152,35 +1120,6 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
     }
 
     func setPages(_ pages: [Page]) {
-        // If already in an ebook reader, update toolbar and return
-        if reader is EpubReaderViewController || reader is TxtReaderViewController {
-            self.pages = pages
-            toolbarView.totalPages = pages.count
-            activityIndicator.stopAnimating()
-            return
-        }
-
-        // If this book is an epub or txt, ensure it stays in ebook reader
-        if currentBookType == .epub {
-            if !(reader is EpubReaderViewController) {
-                setReader(.epub)
-                setChapter(chapter)
-            }
-            self.pages = pages
-            toolbarView.totalPages = pages.count
-            activityIndicator.stopAnimating()
-            return
-        } else if currentBookType == .txt {
-            if !(reader is TxtReaderViewController) {
-                setReader(.txt)
-                setChapter(chapter)
-            }
-            self.pages = pages
-            toolbarView.totalPages = pages.count
-            activityIndicator.stopAnimating()
-            return
-        }
-
         // If already in a text reader with text pages, just update toolbar - don't trigger any switches
         if
             reader is ReaderPagedTextViewController || reader is ReaderTextViewController,
@@ -1402,7 +1341,6 @@ extension ReaderViewController {
                 case is ReaderWebtoonViewController: .lShaped
                 case is ReaderTextViewController: .lShaped
                 case is ReaderPagedTextViewController: .leftRight  // Kindle-style tap zones
-                case is EpubReaderViewController, is TxtReaderViewController: .leftRight
                 default: .leftRight
             }
             case "left-right": .leftRight

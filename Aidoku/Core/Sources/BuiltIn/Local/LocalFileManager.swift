@@ -56,8 +56,15 @@ extension LocalFileManager {
 
         if pathExtension == "epub" {
             let epubBook = try? EpubParser.parse(url: url)
+            let chapters = (epubBook?.chapters ?? []).enumerated().map { index, chapter in
+                ImportChapterInfo(
+                    id: chapter.href,
+                    title: chapter.title,
+                    chapterNumber: Float(index + 1)
+                )
+            }
             let previewImages: [PlatformImage] = epubBook?.coverImage.map { [$0] } ?? []
-            let pageCount = epubBook?.chapters.count ?? 1
+            let pageCount = chapters.count
             let name = epubBook?.title ?? url.deletingPathExtension().lastPathComponent
             return ImportFileInfo(
                 url: url,
@@ -65,17 +72,28 @@ extension LocalFileManager {
                 name: name,
                 pageCount: pageCount,
                 fileType: .epub,
-                comicInfo: nil
+                comicInfo: nil,
+                detectedChapters: chapters
             )
         } else if pathExtension == "txt" {
-            let chapters = TxtParser.parse(url: url)
+            let parsedChapters = TxtParser.parse(url: url)
+            let chapters = parsedChapters.enumerated().map { index, chapter in
+                ImportChapterInfo(
+                    id: "\(chapter.id)",
+                    title: chapter.title,
+                    chapterNumber: Float(index + 1)
+                )
+            }
+            let name = url.deletingPathExtension().lastPathComponent
+            let cover = EbookCoverGenerator.generate(title: name)
             return ImportFileInfo(
                 url: url,
-                previewImages: [],
-                name: url.deletingPathExtension().lastPathComponent,
+                previewImages: [cover],
+                name: name,
                 pageCount: max(1, chapters.count),
                 fileType: .txt,
-                comicInfo: nil
+                comicInfo: nil,
+                detectedChapters: chapters
             )
         }
 
@@ -156,6 +174,11 @@ extension LocalFileManager {
 
         if ext == "epub" {
             if let book = try? EpubParser.parse(url: archiveURL) {
+                if let targetChapter = book.chapters.first(where: { $0.href == chapterId || "\($0.id)" == chapterId }) {
+                    let titleHeader = targetChapter.title.isEmpty ? "" : "# \(targetChapter.title)\n\n"
+                    let fullText = titleHeader + targetChapter.plainTextContent
+                    return [AidokuRunner.Page(content: .text(fullText))]
+                }
                 let textPages = book.chapters.map { chapter -> AidokuRunner.Page in
                     let titleHeader = chapter.title.isEmpty ? "" : "# \(chapter.title)\n\n"
                     let fullText = titleHeader + chapter.plainTextContent
@@ -167,6 +190,12 @@ extension LocalFileManager {
             }
         } else if ext == "txt" || ext == "text" {
             let chapters = TxtParser.parse(url: archiveURL)
+            if let targetIndex = Int(chapterId), chapters.indices.contains(targetIndex) {
+                let targetChapter = chapters[targetIndex]
+                let titleHeader = targetChapter.title.isEmpty ? "" : "# \(targetChapter.title)\n\n"
+                let fullText = titleHeader + targetChapter.content
+                return [AidokuRunner.Page(content: .text(fullText))]
+            }
             let textPages = chapters.map { chapter -> AidokuRunner.Page in
                 let titleHeader = chapter.title.isEmpty ? "" : "# \(chapter.title)\n\n"
                 let fullText = titleHeader + chapter.content
@@ -264,7 +293,8 @@ extension LocalFileManager {
         mangaDescription: String? = nil,
         chapterName: String? = nil,
         volume: Float? = nil,
-        chapter: Float? = nil
+        chapter: Float? = nil,
+        detectedChapters: [ImportChapterInfo] = []
     ) async throws(LocalFileManagerError) {
         // disable file listener while we make changes to the disk
         self.suppressFileEvents = true
@@ -381,14 +411,27 @@ extension LocalFileManager {
                     description: mangaDescription
                 )
             }
-            await LocalFileDataManager.shared.createChapter(
-                mangaId: resolvedMangaId,
-                url: destURL,
-                id: destURL.lastPathComponent,
-                title: chapterName ?? url.deletingPathExtension().lastPathComponent,
-                volume: volume,
-                chapter: chapterNumber
-            )
+            if !detectedChapters.isEmpty {
+                for ch in detectedChapters {
+                    await LocalFileDataManager.shared.createChapter(
+                        mangaId: resolvedMangaId,
+                        url: destURL,
+                        id: ch.id,
+                        title: ch.title,
+                        volume: nil,
+                        chapter: ch.chapterNumber
+                    )
+                }
+            } else {
+                await LocalFileDataManager.shared.createChapter(
+                    mangaId: resolvedMangaId,
+                    url: destURL,
+                    id: destURL.lastPathComponent,
+                    title: chapterName ?? url.deletingPathExtension().lastPathComponent,
+                    volume: volume,
+                    chapter: chapterNumber
+                )
+            }
             return
         }
 

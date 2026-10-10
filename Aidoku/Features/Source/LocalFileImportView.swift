@@ -122,7 +122,7 @@ extension LocalFileImportView.ContentView {
                                 Text(NSLocalizedString("IMPORT")).bold()
                             }
                         }
-                        .disabled(!volumeChapterValid || volumeChapterEmpty)
+                        .disabled((fileInfo?.fileType != .epub && fileInfo?.fileType != .txt) && (!volumeChapterValid || volumeChapterEmpty))
                     }
                 }
             }
@@ -259,64 +259,107 @@ extension LocalFileImportView.ContentView {
 
             // fields
             VStack(spacing: interItemSpacing) {
-                // name
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(NSLocalizedString("CHAPTER_TITLE")).fontWeight(.medium)
+                if fileInfo.fileType == .epub || fileInfo.fileType == .txt {
+                    // 电子书自动检索章节卡片
+                    VStack(alignment: .leading, spacing: 10) {
+                        HStack(spacing: 8) {
+                            Image(systemName: "text.book.closed.fill")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Color.accentColor)
+                            Text("章节目录自动检索")
+                                .font(.system(size: 15, weight: .semibold))
+                            Spacer()
+                            Text("已识别 \(fileInfo.detectedChapters.count) 章")
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+                        }
 
-                    TextFieldWrapper {
-                        TextField(NSLocalizedString("CHAPTER_TITLE"), text: $name)
-                            .autocorrectionDisabled()
-                        if !name.isEmpty {
-                            ClearFieldButton {
-                                name = ""
+                        if !fileInfo.detectedChapters.isEmpty {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(fileInfo.detectedChapters.prefix(6), id: \.id) { ch in
+                                    HStack {
+                                        Text(ch.title)
+                                            .font(.system(size: 14))
+                                            .foregroundStyle(.primary)
+                                            .lineLimit(1)
+                                        Spacer()
+                                        Text("第 \(Int(ch.chapterNumber)) 章")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    .padding(.vertical, 2)
+                                }
+                                if fileInfo.detectedChapters.count > 6 {
+                                    Text("... 等共 \(fileInfo.detectedChapters.count) 个章节将自动入库，无需手动填写")
+                                        .font(.system(size: 12))
+                                        .foregroundStyle(.secondary)
+                                        .padding(.top, 2)
+                                }
+                            }
+                            .padding(12)
+                            .background(Color.secondary.opacity(0.12), in: RoundedRectangle(cornerRadius: 10))
+                        }
+                    }
+                } else {
+                    // name
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(NSLocalizedString("CHAPTER_TITLE")).fontWeight(.medium)
+
+                        TextFieldWrapper {
+                            TextField(NSLocalizedString("CHAPTER_TITLE"), text: $name)
+                                .autocorrectionDisabled()
+                            if !name.isEmpty {
+                                ClearFieldButton {
+                                    name = ""
+                                }
                             }
                         }
                     }
-                }
 
-                // volume/chapter
-                VStack(alignment: .leading, spacing: 6) {
-                    HStack(spacing: interItemSpacing) {
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(NSLocalizedString("VOLUME")).fontWeight(.medium)
+                    // volume/chapter
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: interItemSpacing) {
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(NSLocalizedString("VOLUME")).fontWeight(.medium)
 
-                            TextFieldWrapper(hasError: !volumeChapterValid || volumeChapterEmpty) {
-                                TextField(NSLocalizedString("VOLUME"), value: $volume, format: .number)
-                                    .keyboardType(.decimalPad)
-                                if volume != nil {
-                                    ClearFieldButton {
-                                        volume = nil
+                                TextFieldWrapper(hasError: !volumeChapterValid || volumeChapterEmpty) {
+                                    TextField(NSLocalizedString("VOLUME"), value: $volume, format: .number)
+                                        .keyboardType(.decimalPad)
+                                    if volume != nil {
+                                        ClearFieldButton {
+                                            volume = nil
+                                        }
+                                    }
+                                }
+                            }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(NSLocalizedString("CHAPTER")).fontWeight(.medium)
+
+                                TextFieldWrapper(hasError: !volumeChapterValid || volumeChapterEmpty) {
+                                    TextField(NSLocalizedString("CHAPTER"), value: $chapter, format: .number)
+                                        .keyboardType(.decimalPad)
+                                    if chapter != nil {
+                                        ClearFieldButton {
+                                            chapter = nil
+                                        }
                                     }
                                 }
                             }
                         }
 
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(NSLocalizedString("CHAPTER")).fontWeight(.medium)
-
-                            TextFieldWrapper(hasError: !volumeChapterValid || volumeChapterEmpty) {
-                                TextField(NSLocalizedString("CHAPTER"), value: $chapter, format: .number)
-                                    .keyboardType(.decimalPad)
-                                if chapter != nil {
-                                    ClearFieldButton {
-                                        chapter = nil
-                                    }
-                                }
-                            }
+                        if !volumeChapterValid {
+                            fieldTextView(NSLocalizedString("VOLUME_CHAPTER_INVALID_ERROR"), error: true)
+                        } else if volumeChapterEmpty {
+                            fieldTextView(NSLocalizedString("VOLUME_CHAPTER_EMPTY_ERROR"), error: true)
                         }
                     }
-
-                    if !volumeChapterValid {
-                        fieldTextView(NSLocalizedString("VOLUME_CHAPTER_INVALID_ERROR"), error: true)
-                    } else if volumeChapterEmpty {
-                        fieldTextView(NSLocalizedString("VOLUME_CHAPTER_EMPTY_ERROR"), error: true)
+                    .onChange(of: volume) { _ in
+                        validateVolumeChapter()
                     }
-                }
-                .onChange(of: volume) { _ in
-                    validateVolumeChapter()
-                }
-                .onChange(of: chapter) { _ in
-                    validateVolumeChapter()
+                    .onChange(of: chapter) { _ in
+                        validateVolumeChapter()
+                    }
                 }
 
                 // series select
@@ -405,11 +448,12 @@ extension LocalFileImportView.ContentView {
         }
         seriesDescription = fileInfo.comicInfo?.summary ?? ""
         coverImage = fileInfo.previewImages.first
-        volume = fileInfo.comicInfo?.volume.flatMap { Float($0) }
-            ?? LocalFileNameParser.getMangaVolumeNumber(from: fileInfo.name)
-        chapter = fileInfo.comicInfo?.number.flatMap { Float($0) }
-            ?? LocalFileNameParser.getMangaChapterNumber(from: fileInfo.name)
-            ?? 1
+        if fileInfo.fileType == .epub || fileInfo.fileType == .txt {
+            volume = nil
+            chapter = nil
+            volumeChapterEmpty = false
+            volumeChapterValid = true
+        }
         Task {
             let hasSeries = await LocalFileDataManager.shared.hasSeries(id: seriesName.percentEncoded())
             nameEmpty = selectedMangaId.isEmpty ? seriesName.isEmpty : false
@@ -424,6 +468,11 @@ extension LocalFileImportView.ContentView {
     // ensure there's at least a volume or a chapter number
     // and there are no other chapters with those numbers (if a series is selected)
     func validateVolumeChapter() {
+        if let fileInfo, fileInfo.fileType == .epub || fileInfo.fileType == .txt {
+            volumeChapterEmpty = false
+            volumeChapterValid = true
+            return
+        }
         volumeChapterEmpty = volume == nil && chapter == nil
         if selectedMangaId.isEmpty {
             volumeChapterValid = true
@@ -463,7 +512,8 @@ extension LocalFileImportView.ContentView {
                 mangaDescription: selectedMangaId.isEmpty ? seriesDescription : nil,
                 chapterName: name,
                 volume: volume,
-                chapter: chapter
+                chapter: chapter,
+                detectedChapters: fileInfo.detectedChapters
             )
             NotificationCenter.default.post(name: .init("refresh-content"), object: nil)
             dismiss()
@@ -561,7 +611,7 @@ extension LocalFileImportView.ContentView {
                 } label: {
                     Text(NSLocalizedString("IMPORT")).bold()
                 }
-                .disabled(!nameValid || !volumeChapterValid || nameEmpty || volumeChapterEmpty)
+                .disabled(!nameValid || nameEmpty || ((fileInfo?.fileType != .epub && fileInfo?.fileType != .txt) && (!volumeChapterValid || volumeChapterEmpty)))
             }
         }
         .navigationTitle(NSLocalizedString("NEW_SERIES"))
