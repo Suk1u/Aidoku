@@ -40,10 +40,8 @@ final class EpubReaderViewController: UIViewController, ReaderReaderDelegate {
     private func loadEpubContent() {
         var book: EpubBook?
 
-        if let url = chapter.url ?? manga.url {
-            if FileManager.default.fileExists(atPath: url.path) {
-                book = try? EpubParser.parse(url: url)
-            }
+        if let fileURL = resolveLocalFileURL(extension: "epub") {
+            book = try? EpubParser.parse(url: fileURL)
         }
 
         // 默认章节结构保底
@@ -100,5 +98,40 @@ final class EpubReaderViewController: UIViewController, ReaderReaderDelegate {
     func setChapter(_ chapter: AidokuRunner.Chapter, startPage: Int) {
         self.chapter = chapter
         loadEpubContent()
+    }
+
+    private func resolveLocalFileURL(extension expectedExt: String) -> URL? {
+        // 1. Direct chapter.url
+        if let url = chapter.url, FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        // 2. Direct manga.url
+        if let url = manga.url, FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        // 3. Documents/Local/<manga.key>/<chapter.key>
+        let documentsDir = FileManager.default.documentDirectory
+        let directChapterURL = documentsDir
+            .appendingPathComponent("Local")
+            .appendingPathComponent(manga.key)
+            .appendingPathComponent(chapter.key)
+        if FileManager.default.fileExists(atPath: directChapterURL.path) {
+            return directChapterURL
+        }
+        // 4. Scan folder Documents/Local/<manga.key> for matching extension
+        let mangaFolder = documentsDir
+            .appendingPathComponent("Local")
+            .appendingPathComponent(manga.key)
+        if let items = try? FileManager.default.contentsOfDirectory(atPath: mangaFolder.path) {
+            for item in items {
+                if item.lowercased().hasSuffix(".\(expectedExt)") {
+                    let fileURL = mangaFolder.appendingPathComponent(item)
+                    if FileManager.default.fileExists(atPath: fileURL.path) {
+                        return fileURL
+                    }
+                }
+            }
+        }
+        return nil
     }
 }

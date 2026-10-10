@@ -41,10 +41,8 @@ final class TxtReaderViewController: UIViewController, ReaderReaderDelegate {
         // 尝试从章节本地文件或 URL 读取
         var parsedChapters: [TxtChapter] = []
 
-        if let url = chapter.url ?? manga.url {
-            if FileManager.default.fileExists(atPath: url.path) {
-                parsedChapters = TxtParser.parse(url: url)
-            }
+        if let fileURL = resolveLocalFileURL(extension: "txt") {
+            parsedChapters = TxtParser.parse(url: fileURL)
         }
 
         // 若无现成文件，提供默认章节占位
@@ -86,5 +84,40 @@ final class TxtReaderViewController: UIViewController, ReaderReaderDelegate {
     func setChapter(_ chapter: AidokuRunner.Chapter, startPage: Int) {
         self.chapter = chapter
         loadTextContent()
+    }
+
+    private func resolveLocalFileURL(extension expectedExt: String) -> URL? {
+        // 1. Direct chapter.url
+        if let url = chapter.url, FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        // 2. Direct manga.url
+        if let url = manga.url, FileManager.default.fileExists(atPath: url.path) {
+            return url
+        }
+        // 3. Documents/Local/<manga.key>/<chapter.key>
+        let documentsDir = FileManager.default.documentDirectory
+        let directChapterURL = documentsDir
+            .appendingPathComponent("Local")
+            .appendingPathComponent(manga.key)
+            .appendingPathComponent(chapter.key)
+        if FileManager.default.fileExists(atPath: directChapterURL.path) {
+            return directChapterURL
+        }
+        // 4. Scan folder Documents/Local/<manga.key> for matching extension
+        let mangaFolder = documentsDir
+            .appendingPathComponent("Local")
+            .appendingPathComponent(manga.key)
+        if let items = try? FileManager.default.contentsOfDirectory(atPath: mangaFolder.path) {
+            for item in items {
+                if item.lowercased().hasSuffix(".\(expectedExt)") {
+                    let fileURL = mangaFolder.appendingPathComponent(item)
+                    if FileManager.default.fileExists(atPath: fileURL.path) {
+                        return fileURL
+                    }
+                }
+            }
+        }
+        return nil
     }
 }

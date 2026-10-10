@@ -690,6 +690,12 @@ extension ReaderViewController {
 
 // MARK: - Reading Mode
 extension ReaderViewController {
+    var currentBookType: BookType {
+        let chapterType = chapter.bookType
+        if chapterType != .manga { return chapterType }
+        return manga.bookType
+    }
+
     func setReadingMode(_ mode: String?) {
         switch mode {
             case "rtl": readingMode = .rtl
@@ -723,9 +729,9 @@ extension ReaderViewController {
                 }
         }
 
-        if manga.bookType == .epub {
+        if currentBookType == .epub {
             setReader(.epub)
-        } else if manga.bookType == .txt {
+        } else if currentBookType == .txt {
             setReader(.txt)
         } else if !(reader is ReaderTextViewController) {
             switch readingMode {
@@ -1146,6 +1152,35 @@ extension ReaderViewController: @MainActor ReaderHoldingDelegate {
     }
 
     func setPages(_ pages: [Page]) {
+        // If already in an ebook reader, update toolbar and return
+        if reader is EpubReaderViewController || reader is TxtReaderViewController {
+            self.pages = pages
+            toolbarView.totalPages = pages.count
+            activityIndicator.stopAnimating()
+            return
+        }
+
+        // If this book is an epub or txt, ensure it stays in ebook reader
+        if currentBookType == .epub {
+            if !(reader is EpubReaderViewController) {
+                setReader(.epub)
+                setChapter(chapter)
+            }
+            self.pages = pages
+            toolbarView.totalPages = pages.count
+            activityIndicator.stopAnimating()
+            return
+        } else if currentBookType == .txt {
+            if !(reader is TxtReaderViewController) {
+                setReader(.txt)
+                setChapter(chapter)
+            }
+            self.pages = pages
+            toolbarView.totalPages = pages.count
+            activityIndicator.stopAnimating()
+            return
+        }
+
         // If already in a text reader with text pages, just update toolbar - don't trigger any switches
         if
             reader is ReaderPagedTextViewController || reader is ReaderTextViewController,

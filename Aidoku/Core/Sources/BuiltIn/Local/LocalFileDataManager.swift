@@ -402,6 +402,7 @@ extension LocalFileDataManager {
             chapterObject.chapter = chapter.map { NSNumber(value: $0) }
             chapterObject.dateUploaded = values?.contentModificationDate
         }
+        chapterObject.url = url.absoluteString
         chapterObject.manga = mangaObject
         chapterObject.fileInfo = fileInfo
         // add to the top of the chapter list

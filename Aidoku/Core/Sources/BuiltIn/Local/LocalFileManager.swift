@@ -152,6 +152,31 @@ extension LocalFileManager {
 
         let documentsDir = FileManager.default.documentDirectory
         let archiveURL = documentsDir.appendingPathComponent(cbzPath)
+        let ext = archiveURL.pathExtension.lowercased()
+
+        if ext == "epub" {
+            if let book = try? EpubParser.parse(url: archiveURL) {
+                let textPages = book.chapters.map { chapter -> AidokuRunner.Page in
+                    let titleHeader = chapter.title.isEmpty ? "" : "# \(chapter.title)\n\n"
+                    let fullText = titleHeader + chapter.plainTextContent
+                    return AidokuRunner.Page(content: .text(fullText))
+                }
+                if !textPages.isEmpty {
+                    return textPages
+                }
+            }
+        } else if ext == "txt" || ext == "text" {
+            let chapters = TxtParser.parse(url: archiveURL)
+            let textPages = chapters.map { chapter -> AidokuRunner.Page in
+                let titleHeader = chapter.title.isEmpty ? "" : "# \(chapter.title)\n\n"
+                let fullText = titleHeader + chapter.content
+                return AidokuRunner.Page(content: .text(fullText))
+            }
+            if !textPages.isEmpty {
+                return textPages
+            }
+        }
+
         return readPages(from: archiveURL)
     }
 
